@@ -1,7 +1,3 @@
--- script_backend_sha256_v2.lua
--- Full client script with SHA-256 auth (pure Lua using bit32)
--- Sends authenticated requests to backend endpoints: /log, /exit, /nextCommand
-
 local Http = game:GetService("HttpService")
 local Plrs = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -11,7 +7,6 @@ local Rep = game:GetService("ReplicatedStorage")
 local Plr = Plrs.LocalPlayer
 local Executor = (identifyexecutor and identifyexecutor()) or "Unknown"
 
--- == SHA-256 using bit32 (assumes bit32 table exists in executor) ==
 local b = bit32
 
 local function bor(a,bc) return b.bor(a, bc) end
@@ -42,7 +37,7 @@ local function preprocess(msg)
     while (#msg % 64) ~= 56 do
         msg = msg .. "\0"
     end
-    -- append 64-bit length big-endian
+
     for i = 7, 0, -1 do
         local byte = math.floor(orig_len / (2^(i*8))) % 256
         msg = msg .. string.char(byte)
@@ -92,9 +87,9 @@ local function sha256(msg)
         for i = 0, 63 do
             local S1 = bxor(rrotate(e,6), bxor(rrotate(e,11), rrotate(e,25)))
             local ch = bxor(band(e,f), band(bnot and bnot(e) or (0xFFFFFFFF - e), g))
-            -- handle if bnot not available in bit32; use (~e) & 0xFFFFFFFF
+        
             if type(bnot) ~= "function" then
-                -- emulate bnot
+            
                 local function bnot_em(u) return to_uint32(0xFFFFFFFF - u) end
                 ch = bxor(band(e,f), band(bnot_em(e), g))
             end
@@ -129,7 +124,7 @@ local function sha256(msg)
         H[1],H[2],H[3],H[4],H[5],H[6],H[7],H[8])
 end
 
--- Auth packet
+
 local function generateHash(name, ex, time, id)
     local raw = tostring(name) .. tostring(ex) .. tostring(time) .. tostring(id)
     return sha256(raw)
@@ -152,7 +147,6 @@ local function authPacket(extra)
     return packet
 end
 
--- Notification helper
 local function notif(t,m,d)
     pcall(function() SG:SetCore("SendNotification",{Title=t,Text=m,Duration=d or 4}) end)
     local s = Instance.new("Sound")
@@ -163,7 +157,6 @@ local function notif(t,m,d)
     s:Destroy()
 end
 
--- Main script (based on original)
 local sentLogs = {}
 local function sendLog(pl)
   
@@ -218,7 +211,6 @@ end)
 notif("oi ^^","feito por fp3 no Discord",5)
 notif("Ajuda","Digite .help",7)
 
--- UI creation and other functionality (copied and adapted from original)
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="HelpUI"
 ScreenGui.Parent=Plr:WaitForChild("PlayerGui")
@@ -323,14 +315,12 @@ BR.Color=ColorSequence.new({
 })
 BR.Rotation=45
 
--- Gun system hookups (copied from original)
 local GS=Rep:WaitForChild("GunSystem")
 local GunConfigs=GS:WaitForChild("GunsConfigurations")
 local Fire=GS.Remotes.Events.Fire
 local Reload=GS.Remotes.Functions.Reload
 local LP=Plr
 
--- Variáveis de estado
 local scriptOn=true
 local warnedNoGun=false
 local scriptActive=true
@@ -341,15 +331,15 @@ local tlast=0
 local defaultWalk=16
 local Noclipping=nil
 local Clip=true
-local Aura = false -- Nova variável para o Kill Aura
+local Aura = false
 
 local function track(c)table.insert(connections,c)end
 local function trackT(t)table.insert(threads,t)end
 local function reg(pl)ult=pl tlast=tick()end
 
-local activeUsers={} -- [username] = true
+local activeUsers={}
 
-local function check() -- HasGun -> check
+local function check()
     local bp=LP:FindFirstChild("Backpack")
     local c=LP.Character
     for _,cfg in ipairs(GunConfigs:GetChildren())do
@@ -423,7 +413,7 @@ local function KillScript()
     if not scriptActive then return end
     scriptActive=false
     scriptOn=false
-    Aura=false -- Desativa Aura
+    Aura=false
     Clip=true
     activeUsers[LP.Name]=nil
     if Noclipping then Noclipping:Disconnect() end
@@ -538,7 +528,7 @@ track(Plr.Chatted:Connect(function(msg)
     msg = msg:lower()
 
     if msg == ".off" then
-        Aura=false -- Nova lógica: desliga Aura
+        Aura=false
         scriptOn=false
      
         warnedNoGun=false
@@ -547,12 +537,12 @@ track(Plr.Chatted:Connect(function(msg)
     end
 
     if msg == ".on" then
-        if not check() then -- HasGun -> check
+        if not check() then
             warnedNoGun=true
             notif("Erro","Você precisa de uma arma.")
             return
         end
-        Aura=true -- Nova lógica: liga Aura
+        Aura=true
         scriptOn=true
   
         warnedNoGun=false
@@ -730,16 +720,12 @@ trackT(task.spawn(function()
         task.wait(0.001)
     end
 end))
-
--- Ensure proper cleanup on script end
 local function cleanup()
     notifyStop()
     if Noclipping then pcall(function() Noclipping:Disconnect() end) end
     for _,c in ipairs(connections) do pcall(function() c:Disconnect() end) end
     for _,t in ipairs(threads) do pcall(task.cancel, t) end
 end
-
--- Optional: bind cleanup to game close if available
 if game:IsLoaded() then
     game:BindToClose(function() cleanup() end)
 end
